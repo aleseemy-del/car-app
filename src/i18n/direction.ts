@@ -1,5 +1,6 @@
 import { DevSettings, I18nManager } from 'react-native';
 import * as Updates from 'expo-updates';
+import Constants from 'expo-constants';
 import { alertT } from './index';
 import type { Lang } from './index';
 
@@ -10,6 +11,8 @@ export async function applyDirection(lang: Lang) {
   if (!needsDirectionChange(lang)) return;
   I18nManager.allowRTL(lang === 'ar');
   I18nManager.forceRTL(lang === 'ar');
+  // داخل Expo Go إعادة التشغيل التلقائية تخرّب التطبيق — نكتفي بحفظ الاتجاه، ويتطبّق عند فتح التطبيق مرة ثانية
+  if (Constants.executionEnvironment === 'storeClient') return;
   try {
     await Updates.reloadAsync();
   } catch {
