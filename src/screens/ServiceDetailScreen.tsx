@@ -49,6 +49,23 @@ export default function ServiceDetailScreen({ route, navigation }: Props) {
     Linking.openURL(Platform.OS === 'ios' ? `maps://?q=${q}` : `geo:0,0?q=${q}`).catch(() => Linking.openURL(`https://www.google.com/maps/search/${q}`));
   };
 
+
+  // الضغط على سجل: تعديل أو حذف
+  const openLog = (id: string, service: string) =>
+    alertT('السجل', undefined, [
+      { text: 'تعديل', onPress: () => navigation.navigate('LogService', { service: service as never, editId: id }) },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: () =>
+          alertT('حذف السجل؟', undefined, [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'حذف', style: 'destructive', onPress: () => deleteLog(id) },
+          ]),
+      },
+      { text: 'إلغاء', style: 'cancel' },
+    ]);
+
   const confirmDelete = (id: string) =>
     alertT('حذف السجل؟', undefined, [
       { text: 'إلغاء', style: 'cancel' },
@@ -107,7 +124,7 @@ export default function ServiceDetailScreen({ route, navigation }: Props) {
           <View className="mt-7">
             <SectionTitle title="سجلّك" actionLabel={meta.recordLabel ? '+ سجّل' : undefined} onActionPress={record} />
             <View className="overflow-hidden rounded-card bg-card">
-              {logs.map((l, i) => <MaintenanceItem key={l.id} log={l} last={i === logs.length - 1} onPress={() => confirmDelete(l.id)} />)}
+              {logs.map((l, i) => <MaintenanceItem key={l.id} log={l} last={i === logs.length - 1} onPress={() => openLog(l.id, l.service)} />)}
               {exps.map((e, i) => <ExpenseItem key={e.id} expense={e} last={i === exps.length - 1} />)}
             </View>
           </View>

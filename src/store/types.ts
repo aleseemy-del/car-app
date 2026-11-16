@@ -9,7 +9,11 @@ export type Car = {
   oilIntervalKm: number;
   insuranceExpiry?: string; // YYYY-MM-DD
   inspectionExpiry?: string; // YYYY-MM-DD
+  /** صلاحيتي على السيارة: مالكها، أو مشاركة معي من العائلة */
+  role?: CarRole;
 };
+
+export type CarRole = 'owner' | 'manager' | 'viewer';
 
 export type ExpenseCategory = 'fuel' | 'maintenance' | 'wash' | 'insurance' | 'parts' | 'other';
 
@@ -58,7 +62,8 @@ export type CarDocument = {
 };
 
 export type FamilyRole = 'viewer' | 'manager';
-export type FamilyMember = { id: string; name: string; phone: string; role: FamilyRole };
+/** فرد من العائلة على سيارة معيّنة — يشوفها لما يسجّل بنفس الإيميل */
+export type FamilyMember = { id: string; carId: string; email: string; name: string; role: FamilyRole };
 
 export type Booking = {
   id: string;
@@ -67,6 +72,10 @@ export type Booking = {
   serviceLabel: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
+  /** العربون — يحدده الخادم وقت الدفع */
+  amountKwd?: number;
+  /** حالة الدفع — يغيّرها الخادم بس بعد تأكيد ماي فاتورة */
+  paymentStatus?: 'unpaid' | 'pending' | 'paid' | 'failed';
 };
 
 export type Settings = {

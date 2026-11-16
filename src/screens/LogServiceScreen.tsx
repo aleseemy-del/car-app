@@ -31,30 +31,37 @@ const NUM = (s: string) => parseFloat(s.replace(/,/g, '').replace('٫', '.'));
 /** تسجيل خدمة — أو تحديث الممشى (service = 'mileage') */
 export default function LogServiceScreen({ navigation, route }: Props) {
   const { service } = route.params;
-  const { activeCar, addLog, updateMileage } = useStore();
+  const { state, activeCar, addLog, updateLog, updateMileage } = useStore();
+  // تعديل سجل موجود؟
+  const editing = route.params.editId ? state.logs.find((l) => l.id === route.params.editId) : undefined;
   const { run } = useFeedback();
   const isMileage = service === 'mileage';
   const meta = isMileage ? null : serviceMeta(service);
   const needsExpiry = service === 'insurance' || service === 'inspection';
 
   const today = toISODate(new Date());
-  const [date, setDate] = useState(today);
-  // الممشى الحالي جاهز في كل الخانات
-  const [mileage, setMileage] = useState(String(activeCar.mileageKm));
-  const [cost, setCost] = useState('');
-  const [workshop, setWorkshop] = useState('');
-  const [note, setNote] = useState('');
+  const [date, setDate] = useState(editing?.date ?? today);
+  // الممشى الحالي جاهز في كل الخانات (أو اللي انسجّل مع السجل)
+  const [mileage, setMileage] = useState(editing ? (editing.mileageKm ? String(editing.mileageKm) : '') : String(activeCar.mileageKm));
+  const [cost, setCost] = useState(editing?.costKwd ? String(editing.costKwd) : '');
+  const [workshop, setWorkshop] = useState(editing?.workshop ?? '');
+  const [note, setNote] = useState(editing?.note ?? '');
   const [expiry, setExpiry] = useState(() => {
+    if (editing?.expiry) return editing.expiry;
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
     return toISODate(d);
   });
-  const [interval, setIntervalKm] = useState(activeCar.oilIntervalKm || 5000);
+  const [interval, setIntervalKm] = useState(editing?.intervalKm ?? (activeCar.oilIntervalKm || 5000));
   // الماركة والموديل والمقاس — للإطارات والبطارية والزيت
   const part: PartKind | null = service === 'tires' || service === 'battery' || service === 'oil' ? service : null;
-  const [brand, setBrand] = useState<PickerItem>();
-  const [product, setProduct] = useState<string>();
-  const [spec, setSpec] = useState('');
+  const [brand, setBrand] = useState<PickerItem | undefined>(() => {
+    if (!editing?.brand || !part) return undefined;
+    const known = PART_BRANDS[part].find((b) => b.ar === editing.brand || b.en === editing.brand);
+    return known ? { key: known.id, label: known.ar, sub: known.en } : { key: editing.brand, label: editing.brand };
+  });
+  const [product, setProduct] = useState<string | undefined>(editing?.product);
+  const [spec, setSpec] = useState(editing?.spec ?? '');
   const [sheet, setSheet] = useState<'brand' | 'product' | null>(null);
   const brandItems: PickerItem[] = part ? PART_BRANDS[part].map((b) => ({ key: b.id, label: b.ar, sub: b.en })) : [];
   const productItems: PickerItem[] = part && brand ? (PART_BRANDS[part].find((b) => b.id === brand.key)?.models ?? []).map((m) => ({ key: m, label: m })) : [];
@@ -78,7 +85,7 @@ export default function LogServiceScreen({ navigation, route }: Props) {
 
     const c = NUM(cost);
     run(async () => {
-      await addLog({
+      const fields = {
         carId: activeCar.id,
         service: service as LoggableService,
         date,
@@ -91,7 +98,10 @@ export default function LogServiceScreen({ navigation, route }: Props) {
         brand: brand?.label,
         product,
         spec: spec.trim() || undefined,
-      });
+      };
+      // التعديل ما يضيف مصروف جديد — المصروف القديم يبقى، وتقدر تعدّله من المصاريف
+      if (editing) await updateLog({ ...editing, ...fields });
+      else await addLog(fields);
       navigation.goBack();
     }, { loadingText: 'جاري الحفظ…' });
   };
@@ -101,7 +111,7 @@ export default function LogServiceScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'bottom']}>
       <ScrollView contentContainerClassName="px-5 pb-6 pt-2" keyboardShouldPersistTaps="handled">
-        <ScreenHeader title={isMileage ? 'حدّث الممشى' : meta?.recordLabel ?? 'سجّل'} subtitle={activeCar.name} onBack={() => navigation.goBack()} />
+        <ScreenHeader title={isMileage ? 'حدّث الممشى' : editing ? 'تعديل السجل' : meta?.recordLabel ?? 'سجّل'} subtitle={activeCar.name} onBack={() => navigation.goBack()} />
 
         <View className="mt-6">
           {isMileage ? (
@@ -182,7 +192,7 @@ export default function LogServiceScreen({ navigation, route }: Props) {
               <Field label="التكلفة (اختياري)" suffix="د.ك" keyboardType="decimal-pad" placeholder="0" value={cost} onChangeText={setCost} />
               <Field label={service === 'insurance' ? 'شركة التأمين (اختياري)' : 'الورشة (اختياري)'} value={workshop} onChangeText={setWorkshop} />
               <Field label="ملاحظة (اختياري)" value={note} onChangeText={setNote} />
-              <Text className="text-xs text-muted">لو كتبت التكلفة، تنضاف للمصاريف تلقائياً.</Text>
+              {!editing && <Text className="text-xs text-muted">لو كتبت التكلفة، تنضاف للمصاريف تلقائياً.</Text>}
             </>
           )}
         </View>

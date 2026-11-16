@@ -17,10 +17,20 @@ export default function ExpensesScreen() {
     .filter((e) => e.carId === activeCar.id)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const confirmDelete = (id: string) =>
-    alertT('حذف المصروف؟', undefined, [
+  // الضغط على مصروف: تعديل أو حذف
+  const openExpense = (id: string) =>
+    alertT('المصروف', undefined, [
+      { text: 'تعديل', onPress: () => navigation.navigate('AddExpense', { editId: id }) },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: () =>
+          alertT('حذف المصروف؟', undefined, [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'حذف', style: 'destructive', onPress: () => deleteExpense(id) },
+          ]),
+      },
       { text: 'إلغاء', style: 'cancel' },
-      { text: 'حذف', style: 'destructive', onPress: () => deleteExpense(id) },
     ]);
 
   return (
@@ -51,7 +61,7 @@ export default function ExpensesScreen() {
               <Text className="p-6 text-center text-sm text-muted">سجّل أول مصروف من زر +</Text>
             ) : (
               expenses.map((e, i) => (
-                <ExpenseItem key={e.id} expense={e} last={i === expenses.length - 1} onPress={() => confirmDelete(e.id)} />
+                <ExpenseItem key={e.id} expense={e} last={i === expenses.length - 1} onPress={() => openExpense(e.id)} />
               ))
             )}
           </View>

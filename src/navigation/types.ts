@@ -18,8 +18,8 @@ export type RootStackParamList = {
   Services: undefined;
   ServiceDetail: { serviceId: string };
   Notifications: undefined;
-  AddExpense: { scan?: boolean; category?: import('../store/types').ExpenseCategory } | undefined;
-  LogService: { service: import('../data/serviceMeta').ServiceKey | 'mileage' };
+  AddExpense: { scan?: boolean; category?: import('../store/types').ExpenseCategory; editId?: string } | undefined;
+  LogService: { service: import('../data/serviceMeta').ServiceKey | 'mileage'; editId?: string };
   AddCar: undefined;
   Documents: undefined;
   Workshops: { service?: string };

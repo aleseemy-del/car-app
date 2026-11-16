@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Linking, Pressable, ScrollView, View } from 'react-native';
 import Text from '../components/common/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,12 +14,31 @@ import type { LoggableService } from '../store/types';
 import { formatDate, formatKwd } from '../utils/format';
 import { COLORS } from '../theme/tones';
 import { alertT } from '../i18n';
+import { useFeedback } from '../feedback/FeedbackProvider';
 
 const LOGGABLE = SERVICES.filter((s) => s.record.kind === 'log');
 
 export default function MaintenanceScreen() {
   const navigation = useNavigation();
-  const { state, activeCar, cancelBooking, deleteLog } = useStore();
+  const { state, activeCar, cancelBooking, deleteLog, payBooking, refreshBookings, canEdit } = useStore();
+  const { run } = useFeedback();
+
+  // راجع من صفحة الدفع؟ نجيب حالة الحجوزات من الخادم
+  // (ref عشان ما يعيد الطلب مع كل تحديث للشاشة)
+  const refreshRef = useRef(refreshBookings);
+  refreshRef.current = refreshBookings;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') refreshRef.current().catch(() => {});
+    });
+    refreshRef.current().catch(() => {});
+    return () => sub.remove();
+  }, []);
+
+  const pay = (id: string) =>
+    run(async () => {
+      await Linking.openURL(await payBooking(id));
+    }, { loadingText: 'نجهز صفحة الدفع…' });
   const [filter, setFilter] = useState<'all' | LoggableService>('all');
 
   const bookings = state.bookings.filter((b) => b.carId === activeCar.id).sort((a, b) => a.date.localeCompare(b.date));
@@ -27,6 +46,23 @@ export default function MaintenanceScreen() {
     .filter((l) => l.carId === activeCar.id && (filter === 'all' || l.service === filter))
     .sort((a, b) => b.date.localeCompare(a.date));
   const total = logs.reduce((sum, l) => sum + (l.costKwd ?? 0), 0);
+
+
+  // الضغط على سجل: تعديل أو حذف
+  const openLog = (id: string, service: string) =>
+    alertT('السجل', undefined, [
+      { text: 'تعديل', onPress: () => navigation.navigate('LogService', { service: service as never, editId: id }) },
+      {
+        text: 'حذف',
+        style: 'destructive',
+        onPress: () =>
+          alertT('حذف السجل؟', undefined, [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'حذف', style: 'destructive', onPress: () => deleteLog(id) },
+          ]),
+      },
+      { text: 'إلغاء', style: 'cancel' },
+    ]);
 
   const confirm = (title: string, onOk: () => void) =>
     alertT(title, undefined, [
@@ -74,10 +110,20 @@ export default function MaintenanceScreen() {
                     <View className="ms-3 flex-1">
                       <Text className="text-base font-semibold text-white">{b.serviceLabel} · {w?.name}</Text>
                       <Text className="mt-0.5 text-xs text-muted">{formatDate(b.date)} · {b.time}</Text>
+                      {b.paymentStatus === 'paid' && <Text className="mt-0.5 text-xs font-bold text-status-good">✓ مدفوع {b.amountKwd?.toFixed(3)} د.ك</Text>}
+                      {b.paymentStatus === 'pending' && <Text className="mt-0.5 text-xs text-accent">بانتظار تأكيد الدفع</Text>}
+                      {b.paymentStatus === 'failed' && <Text className="mt-0.5 text-xs text-status-critical">ما تم الدفع</Text>}
                     </View>
-                    <Pressable onPress={() => confirm('إلغاء الموعد؟', () => cancelBooking(b.id))} accessibilityLabel="إلغاء الموعد">
-                      <Ionicons name="close-circle-outline" size={22} color={COLORS.muted} />
-                    </Pressable>
+                    {canEdit && b.paymentStatus && b.paymentStatus !== 'paid' && (
+                      <Pressable onPress={() => pay(b.id)} className="me-2 rounded-full bg-accent px-3 py-1.5 active:opacity-80">
+                        <Text className="text-xs font-bold text-ink">ادفع</Text>
+                      </Pressable>
+                    )}
+                    {b.paymentStatus !== 'paid' && (
+                      <Pressable onPress={() => confirm('إلغاء الموعد؟', () => cancelBooking(b.id))} accessibilityLabel="إلغاء الموعد">
+                        <Ionicons name="close-circle-outline" size={22} color={COLORS.muted} />
+                      </Pressable>
+                    )}
                   </View>
                 );
               })
@@ -110,7 +156,7 @@ export default function MaintenanceScreen() {
             {logs.length === 0 ? (
               <Text className="p-6 text-center text-sm leading-6 text-muted">ما سجّلت أي صيانة للحين.{'\n'}اختر من الأزرار فوق وسجّل.</Text>
             ) : (
-              logs.map((l, i) => <MaintenanceItem key={l.id} log={l} last={i === logs.length - 1} onPress={() => confirm('حذف السجل؟', () => deleteLog(l.id))} />)
+              logs.map((l, i) => <MaintenanceItem key={l.id} log={l} last={i === logs.length - 1} onPress={() => openLog(l.id, l.service)} />)
             )}
           </View>
 

@@ -10,10 +10,28 @@ import { distance } from '../utils/format';
 import { carHealth } from '../utils/serviceStatus';
 import { COLORS } from '../theme/tones';
 import { alertT } from '../i18n';
+import { useFeedback } from '../feedback/FeedbackProvider';
 
 export default function AccountScreen() {
   const navigation = useNavigation();
-  const { state, activeCar, setActiveCar, updateSettings, signOut } = useStore();
+  const { state, activeCar, setActiveCar, updateSettings, signOut, deleteAccount, cloud } = useStore();
+  const { run } = useFeedback();
+  const familyCount = state.family.filter((m) => m.carId === activeCar.id).length;
+
+  // حذف الحساب: تأكيدين لأنه ما يرجع
+  const confirmDelete = () =>
+    alertT('حذف الحساب؟', 'بتنحذف كل سياراتك ومصاريفك وسجلاتك وصورك نهائياً من الخادم. ما نقدر نرجعها.', [
+      { text: 'إلغاء', style: 'cancel' },
+      {
+        text: 'متأكد',
+        style: 'destructive',
+        onPress: () =>
+          alertT('آخر تأكيد', 'هذي الخطوة نهائية.', [
+            { text: 'إلغاء', style: 'cancel' },
+            { text: 'احذف حسابي', style: 'destructive', onPress: () => run(deleteAccount, { loadingText: 'جاري حذف الحساب…' }) },
+          ]),
+      },
+    ]);
   const { settings } = state;
 
   return (
@@ -54,6 +72,7 @@ export default function AccountScreen() {
                       {car.model} · {distance(car.mileageKm, settings.unit)}
                     </Text>
                   </View>
+                  {car.role && car.role !== 'owner' && <Text className="me-2 text-xs text-muted">{car.role === 'manager' ? 'مشاركة · تعديل' : 'مشاركة · مشاهدة'}</Text>}
                   {on ? <Text className="text-xs font-bold text-accent">النشطة</Text> : <StatusIndicator status={carHealth({ car, logs: state.logs, expenses: state.expenses, oilWarnKm: state.settings.oilWarnKm })} dotOnly />}
                 </Pressable>
               );
@@ -66,7 +85,7 @@ export default function AccountScreen() {
           <View className="overflow-hidden rounded-card bg-card">
             <ListRow icon="document-text-outline" label="أوراق السيارة" onPress={() => navigation.navigate('Documents')} />
             <ListRow icon="construct-outline" label="الورش والحجز" onPress={() => navigation.navigate('Workshops', {})} />
-            <ListRow icon="people-outline" label="مشاركة العائلة" value={state.family.length ? String(state.family.length) : undefined} onPress={() => navigation.navigate('Family')} last />
+            <ListRow icon="people-outline" label="مشاركة العائلة" value={familyCount ? String(familyCount) : undefined} onPress={() => navigation.navigate('Family')} last />
           </View>
         </View>
 
@@ -107,14 +126,15 @@ export default function AccountScreen() {
             icon="log-out-outline"
             label="تسجيل الخروج"
             danger
-            last
+            last={!cloud}
             onPress={() =>
-              alertT('تسجيل الخروج؟', 'بياناتك تبقى محفوظة على الجوال.', [
+              alertT('تسجيل الخروج؟', cloud ? 'بياناتك محفوظة على الخادم، وترجع لما تدخل.' : 'البيانات التجريبية بتنمسح.', [
                 { text: 'إلغاء', style: 'cancel' },
                 { text: 'خروج', style: 'destructive', onPress: signOut },
               ])
             }
           />
+          {cloud && <ListRow icon="trash-outline" label="حذف الحساب" danger last onPress={confirmDelete} />}
         </View>
       </ScrollView>
     </SafeAreaView>

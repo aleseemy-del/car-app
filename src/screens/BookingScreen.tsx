@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, View } from 'react-native';
 import Text from '../components/common/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -15,7 +15,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Booking'>;
 const DAY_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 export default function BookingScreen({ navigation, route }: Props) {
-  const { activeCar, addBooking } = useStore();
+  const { activeCar, addBooking, payBooking, cloud } = useStore();
   const { run } = useFeedback();
   const w = workshops.find((x) => x.id === route.params.workshopId) ?? workshops[0];
   const days = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i + 1));
@@ -32,10 +32,21 @@ export default function BookingScreen({ navigation, route }: Props) {
       return;
     }
     run(async () => {
-      await addBooking({ carId: activeCar.id, workshopId: w.id, serviceLabel: WORKSHOP_SERVICE_LABELS[service], date: day, time });
-      alertT('تم الحجز', `${WORKSHOP_SERVICE_LABELS[service]} في ${w.name}\n${formatDate(day)} الساعة ${time}`, [
-        { text: 'تمام', onPress: () => navigation.navigate('Tabs', { screen: 'Maintenance' }) },
-      ]);
+      const id = await addBooking({ carId: activeCar.id, workshopId: w.id, serviceLabel: WORKSHOP_SERVICE_LABELS[service], date: day, time });
+      const goToBookings = () => navigation.navigate('Tabs', { screen: 'Maintenance' });
+      // الدفع: الخادم يحدد المبلغ ويسوي رابط ماي فاتورة، والحجز يصير "مدفوع" بس لما ماي فاتورة تأكد
+      const pay = () =>
+        run(async () => {
+          const url = await payBooking(id);
+          goToBookings();
+          await Linking.openURL(url);
+        }, { loadingText: 'نجهز صفحة الدفع…' });
+      alertT('تم الحجز', `${WORKSHOP_SERVICE_LABELS[service]} في ${w.name}\n${formatDate(day)} الساعة ${time}`, cloud
+        ? [
+            { text: `ادفع العربون (${w.priceFromKwd} د.ك)`, onPress: pay },
+            { text: 'لاحقاً', style: 'cancel', onPress: goToBookings },
+          ]
+        : [{ text: 'تمام', onPress: goToBookings }]);
     }, { loadingText: 'جاري الحجز…' });
   };
 
@@ -81,7 +92,9 @@ export default function BookingScreen({ navigation, route }: Props) {
           <Text className="mt-1 text-base font-bold text-ink">
             {WORKSHOP_SERVICE_LABELS[service]} · {formatDate(day)}{time ? ` · ${time}` : ''}
           </Text>
-          <Text className="mt-1 text-sm text-muted-ink">السعر يبدأ من {w.priceFromKwd} د.ك · الدفع في الورشة</Text>
+          <Text className="mt-1 text-sm text-muted-ink">
+            {cloud ? `العربون ${w.priceFromKwd} د.ك · ادفعه أونلاين بكي نت أو البطاقة` : `السعر يبدأ من ${w.priceFromKwd} د.ك · الدفع في الورشة`}
+          </Text>
         </View>
       </ScrollView>
 

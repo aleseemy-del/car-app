@@ -14,6 +14,8 @@ const URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '';
 const SESSION_KEY = 'car-status/session/v1';
 export const BUCKET = 'car-files';
+/** صفحة تغيير كلمة السر (على موقع car-web في Vercel) */
+const RESET_URL = process.env.EXPO_PUBLIC_RESET_URL ?? 'https://car-web-aleseemy.vercel.app/reset-password';
 
 export const supabaseConfigured = !!URL && !!KEY;
 
@@ -90,6 +92,16 @@ export const auth = {
     if (!session) throw new Error('ما قدرنا نكمل الدخول، حاول مرة ثانية');
     await saveSession(session);
     return session;
+  },
+
+  /** نسيت كلمة السر: يرسل رابط لتغييرها على الإيميل */
+  async resetPassword(email: string) {
+    const res = await fetch(`${URL}/auth/v1/recover?redirect_to=${encodeURIComponent(RESET_URL)}`, {
+      method: 'POST',
+      headers: { apikey: KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) throw new Error(authError(await res.json().catch(() => ({}))));
   },
 
   async signOut() {
@@ -198,6 +210,44 @@ export async function signedUrls(paths: string[]): Promise<Record<string, string
   const out: Record<string, string> = {};
   for (const item of list) if (item.signedURL) out[item.path] = `${URL}/storage/v1${item.signedURL}`;
   return out;
+}
+
+/** يشغّل دالة في قاعدة البيانات (مثل حذف الحساب) */
+export async function rpc<T = unknown>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
+  const res = await fetch(`${URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw dbError(res.status, json ?? {});
+  return json as T;
+}
+
+/** يحذف صور من المخزن (صور المستخدم بس — القواعد ترفض غيرها) */
+export async function deleteFiles(paths: string[]) {
+  if (!paths.length) return;
+  const res = await fetch(`${URL}/storage/v1/object/${BUCKET}`, {
+    method: 'DELETE',
+    headers: { apikey: KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes: paths }),
+  });
+  if (!res.ok) throw new Error('ما قدرنا نحذف الصور، حاول مرة ثانية');
+}
+
+/**
+ * يشغّل Edge Function على خادم Supabase.
+ * هنا تنحفظ المفاتيح السرية (مثل مفتاح الذكاء الاصطناعي) — التطبيق ما يشوفها أبداً.
+ */
+export async function callFunction<T = unknown>(name: string, body: unknown): Promise<T> {
+  const res = await fetch(`${URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: { apikey: KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((json && (json as { error?: string }).error) || 'الخدمة ما ردّت، حاول مرة ثانية');
+  return json as T;
 }
 
 /** معرّف عشوائي بصيغة uuid — قاعدة البيانات تقبله كـ id */

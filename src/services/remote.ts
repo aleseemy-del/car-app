@@ -1,4 +1,4 @@
-import { db, signedUrls, uploadImage } from './supabase';
+import { callFunction, db, deleteFiles, rpc, signedUrls, uploadImage } from './supabase';
 import type { Booking, Car, CarDocument, Expense, FamilyMember, ServiceLog } from '../store/types';
 
 /**
@@ -90,7 +90,15 @@ const docFrom = (r: Row, urls: Record<string, string>): CarDocument => ({
   expiry: opt(r.expiry),
 });
 
-const memberFrom = (r: Row): FamilyMember => ({ id: r.id as string, name: r.name as string, phone: r.phone as string, role: r.role as FamilyMember['role'] });
+const memberFrom = (r: Row): FamilyMember => ({
+  id: r.id as string,
+  carId: r.car_id as string,
+  email: r.member_email as string,
+  name: r.member_name as string,
+  role: r.role as FamilyMember['role'],
+});
+const expenseTo = (e: Expense) =>
+  clean({ id: e.id, car_id: e.carId, category: e.category, amount_kwd: e.amountKwd, date: e.date, odometer_km: e.odometerKm, note: e.note });
 const bookingFrom = (r: Row): Booking => ({
   id: r.id as string,
   carId: r.car_id as string,
@@ -98,6 +106,8 @@ const bookingFrom = (r: Row): Booking => ({
   serviceLabel: r.service_label as string,
   date: r.date as string,
   time: r.time as string,
+  amountKwd: num(r.amount_kwd),
+  paymentStatus: (r.payment_status as Booking['paymentStatus']) ?? 'unpaid',
 });
 
 // ---------- القراءة ----------
@@ -111,17 +121,30 @@ export type RemoteData = {
   bookings: Booking[];
 };
 
-/** يجيب كل بيانات المستخدم من الخادم */
-export async function loadAll(): Promise<RemoteData> {
-  const [profile, cars, expenses, logs, docs, family, bookings] = await Promise.all([
-    db<Row[]>('profiles', { query: 'select=name' }),
+/**
+ * يجيب كل بيانات المستخدم من الخادم: سياراته + السيارات المشاركة معه من العائلة.
+ * RLS هي اللي تقرر شنو يرجع — التطبيق ما يفلتر بنفسه.
+ */
+export async function loadAll(me: { id: string; email: string }): Promise<RemoteData> {
+  const [profile, carRows, expenses, logs, docs, members, bookings] = await Promise.all([
+    db<Row[]>('profiles', { query: `select=name&id=eq.${me.id}` }),
     db<Row[]>('cars', { query: 'select=*&order=created_at.asc' }),
     db<Row[]>('expenses', { query: 'select=*&order=date.desc,created_at.desc' }),
     db<Row[]>('service_logs', { query: 'select=*&order=date.desc,created_at.desc' }),
     db<Row[]>('car_documents', { query: 'select=*' }),
-    db<Row[]>('family_members', { query: 'select=*&order=created_at.asc' }),
+    db<Row[]>('car_members', { query: 'select=*&order=created_at.asc' }),
     db<Row[]>('bookings', { query: 'select=*&order=date.asc' }),
   ]);
+  // صلاحيتي على كل سيارة: مالك، أو حسب دعوة العائلة
+  const email = me.email.toLowerCase();
+  const cars = carRows.map((r) => {
+    const car = carFrom(r);
+    if (r.user_id === me.id) return { ...car, role: 'owner' as const };
+    const m = members.find((x) => x.car_id === car.id && x.member_email === email);
+    return { ...car, role: (m?.role as Car['role']) ?? 'viewer' };
+  });
+  // قائمة العائلة = أعضاء سياراتي أنا (مو الدعوات اللي وصلتني)
+  const family = members.filter((m) => m.owner_id === me.id);
   // الصور خاصة: نطلب روابط مؤقتة لها
   const paths = [
     ...expenses.map((e) => e.receipt_path as string | null),
@@ -130,7 +153,7 @@ export async function loadAll(): Promise<RemoteData> {
   const urls = await signedUrls(paths);
   return {
     name: (profile[0]?.name as string) ?? '',
-    cars: cars.map(carFrom),
+    cars,
     expenses: expenses.map((e) => expenseFrom(e, urls)),
     logs: logs.map(logFrom),
     documents: docs.map((d) => docFrom(d, urls)),
@@ -163,9 +186,21 @@ export const remote = {
       }),
     });
   },
+  async updateExpense(e: Expense, userId: string) {
+    const body: Row = expenseTo(e);
+    delete body.id;
+    if (isLocal(e.receiptUri)) body.receipt_path = await uploadImage(e.receiptUri!, `${userId}/receipts/${e.id}`);
+    else if (!e.receiptUri) body.receipt_path = null; // المستخدم شال الصورة
+    await db('expenses', { method: 'PATCH', query: `id=eq.${e.id}`, body });
+  },
   deleteExpense: (id: string) => db('expenses', { method: 'DELETE', query: `id=eq.${id}` }),
 
   addLog: (l: ServiceLog) => db('service_logs', { method: 'POST', body: logTo(l) }),
+  updateLog: (l: ServiceLog) => {
+    const body: Row = logTo(l);
+    delete body.id;
+    return db('service_logs', { method: 'PATCH', query: `id=eq.${l.id}`, body });
+  },
   deleteLog: (id: string) => db('service_logs', { method: 'DELETE', query: `id=eq.${id}` }),
 
   async upsertDocument(d: CarDocument, userId: string) {
@@ -174,8 +209,27 @@ export const remote = {
     await db('car_documents', { method: 'POST', body, upsertOn: 'car_id,type' });
   },
 
-  addMember: (m: FamilyMember) => db('family_members', { method: 'POST', body: { id: m.id, name: m.name, phone: m.phone, role: m.role } }),
-  removeMember: (id: string) => db('family_members', { method: 'DELETE', query: `id=eq.${id}` }),
+  /** يضيف فرد من العائلة على سيارة. لما يسجّل بنفس الإيميل يشوف السيارة تلقائياً */
+  addMember: (m: FamilyMember) =>
+    db('car_members', { method: 'POST', body: { id: m.id, car_id: m.carId, member_email: m.email, member_name: m.name, role: m.role } }),
+  removeMember: (id: string) => db('car_members', { method: 'DELETE', query: `id=eq.${id}` }),
+
+  /** حذف الحساب: الصور أول، بعدين الحساب (وكل بياناته تنحذف معه في قاعدة البيانات) */
+  async deleteAccount(userId: string) {
+    const [exps, docs] = await Promise.all([
+      db<Row[]>('expenses', { query: `select=receipt_path&user_id=eq.${userId}&receipt_path=not.is.null` }),
+      db<Row[]>('car_documents', { query: `select=image_path&user_id=eq.${userId}&image_path=not.is.null` }),
+    ]);
+    const paths = [...exps.map((e) => e.receipt_path as string), ...docs.map((d) => d.image_path as string)].filter((p) =>
+      p.startsWith(`${userId}/`),
+    );
+    await deleteFiles(paths);
+    await rpc('delete_my_account');
+  },
+
+  /** قراءة الفاتورة بالذكاء الاصطناعي — على الخادم، والمفتاح مخفي هناك */
+  scanReceipt: (imageBase64: string) =>
+    callFunction<{ amountKwd?: number; category?: Expense['category']; date?: string; note?: string }>('scan-receipt', { image: imageBase64 }),
 
   addBooking: (b: Booking) =>
     db('bookings', {
@@ -183,4 +237,7 @@ export const remote = {
       body: { id: b.id, car_id: b.carId, workshop_id: b.workshopId, service_label: b.serviceLabel, date: b.date, time: b.time },
     }),
   cancelBooking: (id: string) => db('bookings', { method: 'DELETE', query: `id=eq.${id}` }),
+  loadBookings: async () => (await db<Row[]>('bookings', { query: 'select=*&order=date.asc' })).map(bookingFrom),
+  /** يطلب رابط دفع من الخادم. التطبيق يرسل رقم الحجز بس — المبلغ يحدده الخادم */
+  payBooking: (bookingId: string) => callFunction<{ url: string; amountKwd: number }>('create-payment', { bookingId }),
 };

@@ -25,7 +25,8 @@ export default function SignUpScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({});
   const [confirmSentTo, setConfirmSentTo] = useState<string>();
-  const { signUp, signIn } = useStore();
+  const { signUp, signIn, resetPassword } = useStore();
+  const [resetSentTo, setResetSentTo] = useState<string>();
   const { run } = useFeedback();
   const signup = mode === 'signup';
 
@@ -50,6 +51,17 @@ export default function SignUpScreen({ navigation, route }: Props) {
     }
     // عنده سيارات: التطبيق يفتح الرئيسية تلقائياً. ما عنده: يضيف أول سيارة
     if (!res.hasCars) navigation.navigate('AddFirstCar');
+  };
+
+  // نسيت كلمة السر: نرسل رابط على الإيميل، والرابط يفتح صفحة تغيير كلمة السر
+  const forgot = async () => {
+    if (!isEmail(email)) return setErrors({ email: 'اكتب إيميلك أول، بعدين اضغط نسيت كلمة السر' });
+    const mail = email.trim().toLowerCase();
+    const ok = await run(async () => {
+      await resetPassword(mail);
+      return true;
+    }, { loadingText: 'جاري الإرسال…' });
+    if (ok) setResetSentTo(mail);
   };
 
   const clear = (k: keyof typeof errors) => setErrors((x) => ({ ...x, [k]: undefined }));
@@ -80,6 +92,15 @@ export default function SignUpScreen({ navigation, route }: Props) {
               <Text className="text-sm font-bold text-accent">تأكد من إيميلك</Text>
               <Text className="mt-1 text-sm leading-5 text-white">
                 {`أرسلنا رابط تأكيد إلى ${confirmSentTo}. اضغط الرابط، بعدين ارجع هنا وسجّل دخول.`}
+              </Text>
+            </View>
+          )}
+
+          {resetSentTo && (
+            <View className="mt-6 rounded-card bg-card p-3.5">
+              <Text className="text-sm font-bold text-accent">شيّك إيميلك</Text>
+              <Text className="mt-1 text-sm leading-5 text-white">
+                {`لو الإيميل ${resetSentTo} مسجّل عندنا، بيوصلك رابط لتغيير كلمة السر. غيّرها وارجع سجّل دخول.`}
               </Text>
             </View>
           )}
@@ -116,7 +137,13 @@ export default function SignUpScreen({ navigation, route }: Props) {
             <Text className="mt-1 text-xs leading-5 text-muted">بياناتك محفوظة على الخادم، وما يشوفها أحد غيرك.</Text>
           </View>
 
-          <Pressable onPress={() => { setMode(signup ? 'login' : 'signup'); setErrors({}); }} className="mt-6 self-start py-2">
+          {!signup && (
+            <Pressable onPress={forgot} className="mt-2 self-start py-2">
+              <Text className="text-sm text-muted">نسيت كلمة السر؟</Text>
+            </Pressable>
+          )}
+
+          <Pressable onPress={() => { setMode(signup ? 'login' : 'signup'); setErrors({}); }} className="mt-4 self-start py-2">
             <Text className="text-sm text-accent">{signup ? 'عندي حساب — سجّل دخول' : 'ما عندي حساب — أنشئ حساب'}</Text>
           </Pressable>
         </ScrollView>

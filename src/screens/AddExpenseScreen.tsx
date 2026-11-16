@@ -20,14 +20,17 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AddExpense'>;
 
 
 export default function AddExpenseScreen({ navigation, route }: Props) {
-  const { activeCar, addExpense } = useStore();
+  const { state, activeCar, addExpense, updateExpense } = useStore();
   const { run } = useFeedback();
-  const [category, setCategory] = useState<ExpenseCategory>(route.params?.category ?? 'fuel');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(toISODate(new Date()));
-  const [odometer, setOdometer] = useState(String(activeCar.mileageKm)); // الممشى الحالي جاهز
-  const [note, setNote] = useState('');
-  const [receiptUri, setReceiptUri] = useState<string>();
+  // تعديل مصروف موجود؟
+  const editing = route.params?.editId ? state.expenses.find((e) => e.id === route.params?.editId) : undefined;
+  const [category, setCategory] = useState<ExpenseCategory>(editing?.category ?? route.params?.category ?? 'fuel');
+  const [amount, setAmount] = useState(editing ? String(editing.amountKwd) : '');
+  const [date, setDate] = useState(editing?.date ?? toISODate(new Date()));
+  // الممشى الحالي جاهز (أو اللي انسجّل مع المصروف)
+  const [odometer, setOdometer] = useState(editing ? (editing.odometerKm ? String(editing.odometerKm) : '') : String(activeCar.mileageKm));
+  const [note, setNote] = useState(editing?.note ?? '');
+  const [receiptUri, setReceiptUri] = useState<string | undefined>(editing?.receiptUri);
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string>();
   const [error, setError] = useState<string>();
@@ -62,16 +65,17 @@ export default function AddExpenseScreen({ navigation, route }: Props) {
       return;
     }
     const odo = parseInt(odometer.replace(/,/g, ''), 10);
+    const fields = {
+      category,
+      amountKwd: Math.round(value * 1000) / 1000,
+      date,
+      odometerKm: Number.isFinite(odo) ? odo : undefined,
+      note: note.trim() || undefined,
+      receiptUri,
+    };
     run(async () => {
-      await addExpense({
-        carId: activeCar.id,
-        category,
-        amountKwd: Math.round(value * 1000) / 1000,
-        date,
-        odometerKm: Number.isFinite(odo) ? odo : undefined,
-        note: note.trim() || undefined,
-        receiptUri,
-      });
+      if (editing) await updateExpense({ ...editing, ...fields });
+      else await addExpense({ carId: activeCar.id, ...fields });
       navigation.goBack();
     }, { loadingText: 'جاري الحفظ…' });
   };
@@ -79,7 +83,7 @@ export default function AddExpenseScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={['top', 'bottom']}>
       <ScrollView contentContainerClassName="px-5 pb-6 pt-2" keyboardShouldPersistTaps="handled">
-        <ScreenHeader title="مصروف جديد" subtitle={activeCar.name} onBack={() => navigation.goBack()} />
+        <ScreenHeader title={editing ? 'تعديل المصروف' : 'مصروف جديد'} subtitle={activeCar.name} onBack={() => navigation.goBack()} />
 
         {/* الفاتورة */}
         <View className="mt-6 rounded-card bg-card p-4">
@@ -143,7 +147,7 @@ export default function AddExpenseScreen({ navigation, route }: Props) {
       </ScrollView>
 
       <View className="flex-row px-5 pb-2 pt-3">
-        <PrimaryButton label="احفظ المصروف" onPress={save} />
+        <PrimaryButton label={editing ? 'احفظ التعديل' : 'احفظ المصروف'} onPress={save} />
       </View>
     </SafeAreaView>
   );
