@@ -22,7 +22,7 @@ const REFRESH_KEY = 'car-status.refresh-token';
 const META_KEY = 'car-status/session-meta/v2';
 export const BUCKET = 'car-files';
 /** صفحة تغيير كلمة السر (على موقع car-web في Vercel) */
-const RESET_URL = process.env.EXPO_PUBLIC_RESET_URL ?? 'https://car-web-aleseemy.vercel.app/reset-password';
+const RESET_URL = process.env.EXPO_PUBLIC_RESET_URL ?? 'https://car-web-livid.vercel.app/reset-password';
 
 export const supabaseConfigured = !!URL && !!KEY;
 
