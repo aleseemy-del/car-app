@@ -13,6 +13,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
  */
 
 const CATEGORIES = ["fuel", "maintenance", "wash", "insurance", "parts", "other"] as const;
+// نماذج مجانية متاحة (تتغير مع الوقت). لو الأول مو متاح OpenRouter يجرّب اللي بعده تلقائياً.
+// قراءة الفواتير تحتاج نموذج يقرا الصور (vision)، فنستخدم Gemma 4 بس.
+const DEFAULT_MODELS = ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"];
 const MAX_IMAGE_CHARS = 7_000_000; // ~5 ميغا
 const DAILY_LIMIT = 30; // قراءة فاتورة لكل مستخدم في ٢٤ ساعة
 const BURST_LIMIT = 6; // ولكل ١٠ دقايق
@@ -75,7 +78,8 @@ Deno.serve(async (req) => {
 
   const key = Deno.env.get("OPENROUTER_API_KEY");
   if (!key) return json({ error: "قراءة الفواتير مو مفعّلة للحين" }, 503);
-  const model = Deno.env.get("OPENROUTER_MODEL") || "google/gemma-3-27b-it:free";
+  const envModel = Deno.env.get("OPENROUTER_MODEL");
+  const models = envModel ? [envModel] : DEFAULT_MODELS;
 
   // حد الاستخدام: اللي يتخطاه يستنى — يحمي رصيد الذكاء الاصطناعي من أي حساب يكرر الطلب
   const uRes = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: req.headers.get("Authorization") ?? "" } });
@@ -103,7 +107,7 @@ Deno.serve(async (req) => {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model,
+      models,
       temperature: 0,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
