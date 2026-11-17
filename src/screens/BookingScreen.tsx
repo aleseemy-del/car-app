@@ -1,5 +1,6 @@
+import { openPaymentUrl } from '../services/paymentUrl';
 import { useState } from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import Text from '../components/common/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -39,7 +40,7 @@ export default function BookingScreen({ navigation, route }: Props) {
         run(async () => {
           const url = await payBooking(id);
           goToBookings();
-          await Linking.openURL(url);
+          await openPaymentUrl(url);
         }, { loadingText: 'نجهز صفحة الدفع…' });
       alertT('تم الحجز', `${WORKSHOP_SERVICE_LABELS[service]} في ${w.name}\n${formatDate(day)} الساعة ${time}`, cloud
         ? [

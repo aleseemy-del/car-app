@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   if (typeof bookingId !== "string" || !/^[0-9a-f-]{36}$/i.test(bookingId)) return json({ error: "طلب غير صحيح" }, 400);
 
   // ١. الحجز — بتوكن المستخدم، فلو مو حجزه أو حجز سيارة مشاركة معه، ما يرجع شي
-  const bRes = await asUser(jwt, `/rest/v1/bookings?id=eq.${bookingId}&select=id,car_id,workshop_id,service_label,date,time,payment_status`);
+  const bRes = await asUser(jwt, `/rest/v1/bookings?id=eq.${bookingId}&select=id,car_id,workshop_id,service_label,date,time,payment_status,invoice_id`);
   const booking = (await bRes.json())?.[0];
   if (!booking) return json({ error: "الحجز مو موجود" }, 404);
   if (booking.payment_status === "paid") return json({ error: "هالحجز مدفوع من قبل" }, 409);
@@ -54,6 +54,25 @@ Deno.serve(async (req) => {
   const rRes = await asUser(jwt, `/rest/v1/rpc/car_role`, { method: "POST", body: JSON.stringify({ p_car: booking.car_id }) });
   const role = await rRes.json();
   if (role !== "owner" && role !== "manager") return json({ error: "صلاحيتك على هالسيارة مشاهدة بس" }, 403);
+
+  // ٢.٥ لو فيه فاتورة قديمة لنفس الحجز: نسأل ماي فاتورة هل اندفعت؟ ما نبدّلها قبل ما نتأكد
+  // (وإلا ممكن العميل يدفع الفاتورة القديمة وتنخصم فلوسه والحجز يبقى غير مدفوع)
+  if (booking.invoice_id) {
+    const oldRes = await fetch(`${base}/v2/GetPaymentStatus`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ Key: String(booking.invoice_id), KeyType: "InvoiceId" }),
+    });
+    const old = await oldRes.json().catch(() => null);
+    if (oldRes.ok && old?.IsSuccess && old?.Data?.InvoiceStatus === "Paid") {
+      const paidTx = old.Data.InvoiceTransactions?.find((t: { TransactionStatus?: string }) => t.TransactionStatus === "Succss" || t.TransactionStatus === "Success");
+      await asServer(`/rest/v1/bookings?id=eq.${booking.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status: "paid", payment_id: paidTx?.PaymentId ?? null, paid_at: new Date().toISOString() }),
+      });
+      return json({ error: "هالحجز مدفوع من قبل" }, 409);
+    }
+  }
 
   // ٣. المبلغ من الخادم — مو من التطبيق
   const wRes = await asServer(`/rest/v1/workshops?id=eq.${encodeURIComponent(booking.workshop_id)}&select=name,deposit_kwd`);

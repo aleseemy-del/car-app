@@ -1,5 +1,6 @@
+import { openPaymentUrl } from '../services/paymentUrl';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Pressable, ScrollView, View } from 'react-native';
+import { AppState, Pressable, ScrollView, View } from 'react-native';
 import Text from '../components/common/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,7 +38,7 @@ export default function MaintenanceScreen() {
 
   const pay = (id: string) =>
     run(async () => {
-      await Linking.openURL(await payBooking(id));
+      await openPaymentUrl(await payBooking(id));
     }, { loadingText: 'نجهز صفحة الدفع…' });
   const [filter, setFilter] = useState<'all' | LoggableService>('all');
 

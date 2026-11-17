@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
 
 /**
  * عميل Supabase خفيف مبني على fetch.
@@ -12,7 +14,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 const URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '';
-const SESSION_KEY = 'car-status/session/v1';
+/** النسخة القديمة: كانت الجلسة كلها في AsyncStorage بدون تشفير — نقلها للمخزن المشفّر أول ما يفتح التطبيق */
+const LEGACY_SESSION_KEY = 'car-status/session/v1';
+/** التوكنات (الحساسة) في مخزن الجهاز المشفّر (Keychain / Keystore)، والباقي عادي */
+const ACCESS_KEY = 'car-status.access-token';
+const REFRESH_KEY = 'car-status.refresh-token';
+const META_KEY = 'car-status/session-meta/v2';
 export const BUCKET = 'car-files';
 /** صفحة تغيير كلمة السر (على موقع car-web في Vercel) */
 const RESET_URL = process.env.EXPO_PUBLIC_RESET_URL ?? 'https://car-web-aleseemy.vercel.app/reset-password';
@@ -34,8 +41,8 @@ let refreshing: Promise<Session | null> | null = null;
 function authError(json: { error_code?: string; msg?: string; error_description?: string; message?: string }): string {
   const code = json.error_code ?? '';
   if (code === 'invalid_credentials') return 'الإيميل أو كلمة السر غلط';
-  if (code === 'email_not_confirmed') return 'أكّد إيميلك أول من الرسالة اللي وصلتك';
-  if (code === 'user_already_exists') return 'هذا الإيميل مسجّل من قبل — سجّل دخول';
+  if (code === 'email_not_confirmed') return 'الإيميل أو كلمة السر غلط، أو لازم تأكّد إيميلك من الرسالة اللي وصلتك';
+  if (code === 'user_already_exists') return 'ما قدرنا ننشئ الحساب بهالبيانات — جرّب تسجّل دخول أو "نسيت كلمة السر؟"';
   if (code === 'weak_password') return 'كلمة السر ضعيفة — 8 أحرف على الأقل';
   if (code === 'over_email_send_rate_limit') return 'محاولات كثيرة، انتظر شوي وحاول مرة ثانية';
   if (code === 'email_address_invalid') return 'الإيميل مو صحيح';
@@ -62,8 +69,38 @@ function toSession(j: AuthJson): Session | null {
 
 async function saveSession(s: Session | null) {
   current = s;
-  if (s) await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(s));
-  else await AsyncStorage.removeItem(SESSION_KEY);
+  if (s) {
+    await SecureStore.setItemAsync(ACCESS_KEY, s.accessToken);
+    await SecureStore.setItemAsync(REFRESH_KEY, s.refreshToken);
+    await AsyncStorage.setItem(META_KEY, JSON.stringify({ expiresAt: s.expiresAt, user: s.user }));
+  } else {
+    await Promise.all([SecureStore.deleteItemAsync(ACCESS_KEY), SecureStore.deleteItemAsync(REFRESH_KEY), AsyncStorage.removeItem(META_KEY)]).catch(() => {});
+  }
+  await AsyncStorage.removeItem(LEGACY_SESSION_KEY).catch(() => {});
+}
+
+/** يقرا الجلسة المحفوظة (ولو لقى القديمة غير المشفّرة ينقلها) */
+async function loadSession(): Promise<Session | null> {
+  try {
+    const [accessToken, refreshToken, metaRaw] = await Promise.all([
+      SecureStore.getItemAsync(ACCESS_KEY),
+      SecureStore.getItemAsync(REFRESH_KEY),
+      AsyncStorage.getItem(META_KEY),
+    ]);
+    if (accessToken && refreshToken && metaRaw) {
+      const meta = JSON.parse(metaRaw) as Pick<Session, 'expiresAt' | 'user'>;
+      return { accessToken, refreshToken, expiresAt: meta.expiresAt, user: meta.user };
+    }
+    const legacy = await AsyncStorage.getItem(LEGACY_SESSION_KEY);
+    if (legacy) {
+      const s = JSON.parse(legacy) as Session;
+      await saveSession(s); // ينقلها للمخزن المشفّر ويمسح القديمة
+      return s;
+    }
+  } catch {
+    // مخزن تالف أو غير متاح — نعتبره غير مسجّل دخول
+  }
+  return null;
 }
 
 async function authFetch(path: string, body: unknown) {
@@ -115,10 +152,7 @@ export const auth = {
 
   /** الجلسة المحفوظة (ويجددها لو قربت تنتهي). null = مو مسجّل */
   async getSession(): Promise<Session | null> {
-    if (!current) {
-      const raw = await AsyncStorage.getItem(SESSION_KEY);
-      current = raw ? (JSON.parse(raw) as Session) : null;
-    }
+    if (!current) current = await loadSession();
     if (!current) return null;
     if (current.expiresAt - 60 > Date.now() / 1000) return current;
     return auth.refresh();
@@ -197,13 +231,13 @@ export async function uploadImage(localUri: string, path: string): Promise<strin
   return fullPath;
 }
 
-/** روابط مؤقتة (أسبوع) للصور الخاصة — الرابط يشتغل بس لصاحب الصورة */
+/** روابط مؤقتة (٦ ساعات) للصور الخاصة — ورا الرابط صور حساسة (استمارة، رخصة، فواتير) فنقصّر عمره */
 export async function signedUrls(paths: string[]): Promise<Record<string, string>> {
   if (!paths.length) return {};
   const res = await fetch(`${URL}/storage/v1/object/sign/${BUCKET}`, {
     method: 'POST',
     headers: { apikey: KEY, Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ expiresIn: 60 * 60 * 24 * 7, paths }),
+    body: JSON.stringify({ expiresIn: 60 * 60 * 6, paths }),
   });
   if (!res.ok) return {};
   const list = (await res.json()) as { path: string; signedURL?: string }[];
@@ -250,10 +284,7 @@ export async function callFunction<T = unknown>(name: string, body: unknown): Pr
   return json as T;
 }
 
-/** معرّف عشوائي بصيغة uuid — قاعدة البيانات تقبله كـ id */
+/** معرّف عشوائي بصيغة uuid (من مولّد الجهاز الآمن) — قاعدة البيانات تقبله كـ id */
 export function uuid(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
+  return Crypto.randomUUID();
 }

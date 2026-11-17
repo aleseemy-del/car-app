@@ -14,6 +14,22 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const CATEGORIES = ["fuel", "maintenance", "wash", "insurance", "parts", "other"] as const;
 const MAX_IMAGE_CHARS = 7_000_000; // ~5 ميغا
+const DAILY_LIMIT = 30; // قراءة فاتورة لكل مستخدم في ٢٤ ساعة
+const BURST_LIMIT = 6; // ولكل ١٠ دقايق
+const SB_URL = Deno.env.get("SUPABASE_URL")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const asServer = (path: string, init: RequestInit = {}) =>
+  fetch(`${SB_URL}${path}`, { ...init, headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, "Content-Type": "application/json", ...(init.headers ?? {}) } });
+
+/** عدد قراءات المستخدم منذ وقت معيّن */
+async function countScans(userId: string, sinceMs: number): Promise<number> {
+  const since = new Date(Date.now() - sinceMs).toISOString();
+  const r = await asServer(`/rest/v1/receipt_scans?select=id&user_id=eq.${userId}&created_at=gte.${encodeURIComponent(since)}`, { method: "HEAD", headers: { Prefer: "count=exact" } });
+  const range = r.headers.get("content-range") ?? "*/0";
+  return Number(range.split("/")[1]) || 0;
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -61,6 +77,15 @@ Deno.serve(async (req) => {
   if (!key) return json({ error: "قراءة الفواتير مو مفعّلة للحين" }, 503);
   const model = Deno.env.get("OPENROUTER_MODEL") || "google/gemma-3-27b-it:free";
 
+  // حد الاستخدام: اللي يتخطاه يستنى — يحمي رصيد الذكاء الاصطناعي من أي حساب يكرر الطلب
+  const uRes = await fetch(`${SB_URL}/auth/v1/user`, { headers: { apikey: ANON, Authorization: req.headers.get("Authorization") ?? "" } });
+  const user = await uRes.json().catch(() => null);
+  const userId = typeof user?.id === "string" && /^[0-9a-f-]{36}$/i.test(user.id) ? user.id : null;
+  if (!userId) return json({ error: "انتهت الجلسة، سجّل دخول مرة ثانية" }, 401);
+  if ((await countScans(userId, 10 * 60_000)) >= BURST_LIMIT || (await countScans(userId, 24 * 3600_000)) >= DAILY_LIMIT) {
+    return json({ error: "وصلت الحد اليومي لقراءة الفواتير، اكتب المبلغ يدوياً" }, 429);
+  }
+
   let image: unknown;
   try {
     ({ image } = await req.json());
@@ -71,6 +96,8 @@ Deno.serve(async (req) => {
     return json({ error: "الصورة مو صحيحة" }, 400);
   }
   if (image.length > MAX_IMAGE_CHARS) return json({ error: "الصورة كبيرة، جرّب صورة أصغر" }, 413);
+
+  await asServer(`/rest/v1/receipt_scans`, { method: "POST", body: JSON.stringify({ user_id: userId }) });
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",

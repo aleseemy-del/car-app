@@ -22,7 +22,7 @@ const asServer = (path: string, init: RequestInit = {}) =>
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const paymentId = url.searchParams.get("paymentId");
-  if (!paymentId || !/^[\w-]{1,64}$/.test(paymentId)) return text("رابط غير صحيح.", 400);
+  if (!paymentId || !/^\d{4,40}$/.test(paymentId)) return text("رابط غير صحيح.", 400);
 
   const token = Deno.env.get("MYFATOORAH_TOKEN");
   if (!token) return text("الدفع مو مفعّل.", 503);
@@ -51,22 +51,28 @@ Deno.serve(async (req) => {
   const sameInvoice = String(booking.invoice_id) === String(data.InvoiceId);
   const sameAmount = Math.abs(Number(booking.amount_kwd) - Number(data.InvoiceValue)) < 0.001;
 
-  const paid = data.InvoiceStatus === "Paid" && sameInvoice && sameAmount;
+  // الفواتير ننشئها نحن بس (التوكن عندنا) والحجز مكتوب فيها — فالدفع المؤكد لنفس الحجز وبنفس المبلغ يكفي،
+  // حتى لو العميل دفع فاتورة أقدم من آخر فاتورة سجّلناها.
+  const paid = data.InvoiceStatus === "Paid" && sameAmount;
   if (data.InvoiceStatus === "Paid" && !paid) {
-    console.error("payment mismatch", { bookingId, sameInvoice, sameAmount });
+    console.error("payment mismatch", { bookingId, sameAmount });
     return text("فيه اختلاف في بيانات الدفع. تواصل معنا.", 409);
   }
 
   // ٣. نحدّث الحالة (بصلاحية الخادم بس — التطبيق ما يقدر يغيّرها)
   if (booking.payment_status !== "paid") {
-    await asServer(`/rest/v1/bookings?id=eq.${bookingId}`, {
-      method: "PATCH",
-      body: JSON.stringify(
-        paid
-          ? { payment_status: "paid", payment_id: paymentId, paid_at: new Date().toISOString() }
-          : { payment_status: "failed", payment_id: paymentId },
-      ),
-    });
+    if (paid) {
+      await asServer(`/rest/v1/bookings?id=eq.${bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status: "paid", payment_id: paymentId, invoice_id: String(data.InvoiceId), paid_at: new Date().toISOString() }),
+      });
+    } else if (sameInvoice && data.InvoiceStatus !== "Pending") {
+      // نسجّل الفشل بس للفاتورة الحالية، وبس لو انتهت فعلاً — فاتورة قديمة ما تلغي محاولة جديدة
+      await asServer(`/rest/v1/bookings?id=eq.${bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status: "failed", payment_id: paymentId }),
+      });
+    }
   }
 
   return paid
