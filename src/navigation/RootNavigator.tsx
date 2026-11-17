@@ -9,6 +9,7 @@ import DocumentsScreen from '../screens/DocumentsScreen';
 import WorkshopsScreen from '../screens/WorkshopsScreen';
 import BookingScreen from '../screens/BookingScreen';
 import FamilyScreen from '../screens/FamilyScreen';
+import ChatScreen from '../screens/ChatScreen';
 import LogServiceScreen from '../screens/LogServiceScreen';
 import WelcomeScreen from '../screens/onboarding/WelcomeScreen';
 import LanguageScreen from '../screens/onboarding/LanguageScreen';
@@ -57,6 +58,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Workshops" component={WorkshopsScreen} />
       <Stack.Screen name="Booking" component={BookingScreen} />
       <Stack.Screen name="Family" component={FamilyScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       {/* النماذج تطلع من تحت */}
       <Stack.Screen name="AddExpense" component={AddExpenseScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="AddCar" component={AddCarScreen} options={{ animation: 'slide_from_bottom' }} />

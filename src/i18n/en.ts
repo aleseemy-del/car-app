@@ -2,6 +2,25 @@
 // {0} {1} = أجزاء متغيرة (أرقام، أسماء…) وتنترجم هي بعد لو لها ترجمة.
 // نص جديد ما له ترجمة؟ يطلع بالعربي — أضفه هنا.
 export const EN: Record<string, string> = {
+  // ===== المساعد =====
+  'مساعد السيارة': 'Car assistant',
+  'عندك مشكلة في سيارتك؟': 'Having a problem with your car?',
+  'اسأل المساعد يشخّصها ويعطيك الحل': 'Ask the assistant to diagnose it and suggest a fix',
+  'اسأل مساعد السيارة': 'Ask the car assistant',
+  'وصف المشكلة': 'Describe the problem',
+  'اكتب مشكلة سيارتك…': 'Describe your car problem…',
+  'أرسل': 'Send',
+  'يكتب…': 'Typing…',
+  'السيارة تهتز لما أفرمل': 'The car shakes when I brake',
+  'لمبة الزيت اشتغلت': 'The oil warning light came on',
+  'المكيف ما يبرد زين': "The AC doesn't cool well",
+  'صوت غريب من المحرك': 'Strange noise from the engine',
+  'السيارة ما تشتغل الصبح': "The car won't start in the morning",
+  'المساعد يعطي تقدير مو تشخيص نهائي — الورشة تأكد المشكلة.': 'The assistant gives an estimate, not a final diagnosis — a workshop confirms the problem.',
+  'احجز موعد في ورشة': 'Book a workshop appointment',
+  'سجّل دخول عشان تستخدم المساعد': 'Sign in to use the assistant',
+  'المساعد يحتاج حساب عشان يعرف بيانات سيارتك ويحفظ حدود الاستخدام.': 'The assistant needs an account to know your car and keep usage limits.',
+  'جرّب سؤال من هذي:': 'Try one of these:',
   // ===== عام =====
   'جاري التحميل…': 'Loading…',
   'حاول مرة ثانية': 'Try again',

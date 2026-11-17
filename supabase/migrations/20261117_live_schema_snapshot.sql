@@ -189,3 +189,13 @@ create table if not exists public.receipt_scans (
 create index if not exists receipt_scans_user_time on public.receipt_scans (user_id, created_at desc);
 alter table public.receipt_scans enable row level security;
 revoke all on public.receipt_scans from anon, authenticated;
+
+-- ───────────── حد استخدام المساعد (الشات بوت) ─────────────
+create table if not exists public.chat_usage (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists chat_usage_user_time on public.chat_usage (user_id, created_at desc);
+alter table public.chat_usage enable row level security;
+revoke all on public.chat_usage from anon, authenticated;

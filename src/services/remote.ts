@@ -231,6 +231,10 @@ export const remote = {
   scanReceipt: (imageBase64: string) =>
     callFunction<{ amountKwd?: number; category?: Expense['category']; date?: string; note?: string }>('scan-receipt', { image: imageBase64 }),
 
+  /** مساعد السيارة: الخادم يجيب بيانات السيارة بنفسه، والمفتاح مخفي هناك */
+  chat: (messages: { role: 'user' | 'assistant'; content: string }[], carId?: string) =>
+    callFunction<{ reply: string }>('car-chat', { messages, carId }),
+
   addBooking: (b: Booking) =>
     db('bookings', {
       method: 'POST',

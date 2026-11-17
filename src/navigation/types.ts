@@ -25,6 +25,7 @@ export type RootStackParamList = {
   Workshops: { service?: string };
   Booking: { workshopId: string; service?: string };
   Family: undefined;
+  Chat: undefined;
 };
 
 // يخلي useNavigation() يعرف أسماء الشاشات في كل التطبيق

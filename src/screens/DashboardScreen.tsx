@@ -1,4 +1,6 @@
-import { ScrollView, View } from 'react-native';
+import { I18nManager, Pressable, ScrollView, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import Text from '../components/common/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { DashboardHeader, SectionTitle, ServiceGrid, SummerCard, VehicleCard } from '../components/dashboard';
@@ -54,6 +56,22 @@ export default function DashboardScreen() {
             <SummerCard advice={advice} onPress={() => navigation.navigate('ServiceDetail', { serviceId: 'weather' })} />
           </View>
         )}
+
+        <Pressable
+          onPress={() => navigation.navigate('Chat')}
+          className="mt-4 flex-row items-center rounded-card bg-accent p-4 active:opacity-85"
+          accessibilityRole="button"
+          accessibilityLabel="اسأل مساعد السيارة"
+        >
+          <View className="h-11 w-11 items-center justify-center rounded-full bg-ink">
+            <Ionicons name="chatbubbles" size={20} color="#FF7A1A" />
+          </View>
+          <View className="ms-3 flex-1">
+            <Text className="text-base font-bold text-ink">عندك مشكلة في سيارتك؟</Text>
+            <Text className="mt-0.5 text-xs text-ink">اسأل المساعد يشخّصها ويعطيك الحل</Text>
+          </View>
+          <Ionicons name={I18nManager.isRTL ? 'chevron-back' : 'chevron-forward'} size={20} color="#0B0B0C" />
+        </Pressable>
 
         <View className="mt-6">
           <SectionTitle title="الخدمات" actionLabel="عرض الكل" onActionPress={() => navigation.navigate('Services')} />
