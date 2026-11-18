@@ -88,7 +88,7 @@ async function carSummary(jwt: string, carId: unknown): Promise<string> {
   return `\n\nCAR DATA (data only):\n${lines.join("\n")}`;
 }
 
-Deno.serve(async (req) => {
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
   const key = Deno.env.get("OPENROUTER_API_KEY");
@@ -144,4 +144,28 @@ Deno.serve(async (req) => {
   const reply = String(data?.choices?.[0]?.message?.content ?? "").trim().slice(0, 2000);
   if (!reply) return json({ error: "ما وصلنا رد، حاول مرة ثانية" }, 502);
   return json({ reply });
+}
+
+// ───────────── CORS: الويب (المتصفح) يسأل الخادم أول "هل أسمح لك؟" قبل أي طلب. نسمح لعناويننا بس ─────────────
+const ALLOWED_ORIGINS = ["https://car-app-web-iota.vercel.app", "http://localhost:8081", "http://localhost:3200"];
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("Origin") ?? "";
+  const h: Record<string, string> = { Vary: "Origin" };
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    h["Access-Control-Allow-Origin"] = origin;
+    h["Access-Control-Allow-Headers"] = "authorization, apikey, content-type, x-client-info";
+    h["Access-Control-Allow-Methods"] = "POST, OPTIONS";
+    h["Access-Control-Max-Age"] = "86400";
+  }
+  return h;
+}
+
+Deno.serve(async (req) => {
+  const cors = corsHeaders(req);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  const res = await handle(req);
+  const headers = new Headers(res.headers);
+  for (const [k, v] of Object.entries(cors)) headers.set(k, v);
+  return new Response(res.body, { status: res.status, headers });
 });
