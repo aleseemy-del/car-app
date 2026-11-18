@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import Text from '../../components/common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../../components/common/SafeAreaView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton, ScreenHeader } from '../../components/common';
 import { Field } from '../../components/forms';

@@ -1,5 +1,5 @@
 import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../components/common/SafeAreaView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenHeader } from '../components/common';
 import { SectionTitle, ServiceGrid } from '../components/dashboard';

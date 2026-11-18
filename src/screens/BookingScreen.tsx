@@ -2,7 +2,7 @@ import { openPaymentUrl } from '../services/paymentUrl';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import Text from '../components/common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../components/common/SafeAreaView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Chip, PrimaryButton, ScreenHeader } from '../components/common';
 import { TIME_SLOTS, WORKSHOP_SERVICE_LABELS, workshops, type WorkshopService } from '../data/workshops';

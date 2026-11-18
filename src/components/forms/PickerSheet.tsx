@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
 import Text from '../common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../common/SafeAreaView';
 import { Ionicons } from '@expo/vector-icons';
 import { matches } from '../../data/carCatalog';
 import { COLORS } from '../../theme/tones';

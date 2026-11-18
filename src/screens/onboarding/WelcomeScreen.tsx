@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 import Text from '../../components/common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../../components/common/SafeAreaView';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { I18nManager } from 'react-native';

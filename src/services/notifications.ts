@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import type { Reminder } from '../utils/reminders';
 import { tr } from '../i18n';
@@ -18,6 +19,7 @@ Notifications.setNotificationHandler({
  * يلغي القديم أول عشان ما يتكرر.
  */
 export async function scheduleReminderNotifications(reminders: Reminder[], enabled: boolean) {
+  if (Platform.OS === 'web') return; // إشعارات الجدولة للجوال بس
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     if (!enabled || reminders.length === 0) return;
@@ -49,6 +51,7 @@ export async function scheduleReminderNotifications(reminders: Reminder[], enabl
 
 /** تنبيه تجريبي بعد 5 ثواني — عشان تتأكد إن الإشعارات شغالة على جوالك */
 export async function sendTestNotification(title: string, body: string): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
   try {
     const perm = await Notifications.requestPermissionsAsync();
     if (!perm.granted) return false;

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../components/common/SafeAreaView';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PrimaryButton, ScreenHeader } from '../components/common';
 import { Field, PickerSheet, SelectField, type PickerItem } from '../components/forms';

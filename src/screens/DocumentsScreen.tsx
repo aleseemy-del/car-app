@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Text from '../components/common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../components/common/SafeAreaView';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenHeader } from '../components/common';

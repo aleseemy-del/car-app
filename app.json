@@ -19,7 +19,15 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "حالة السيارة",
+      "shortName": "حالة السيارة",
+      "backgroundColor": "#0B0B0C",
+      "themeColor": "#0B0B0C",
+      "lang": "ar",
+      "description": "تابع صيانة سيارتك ومصاريفها في مكان واحد"
     },
     "plugins": [
       "expo-status-bar",

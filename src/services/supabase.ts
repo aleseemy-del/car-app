@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 
@@ -20,6 +21,16 @@ const LEGACY_SESSION_KEY = 'car-status/session/v1';
 const ACCESS_KEY = 'car-status.access-token';
 const REFRESH_KEY = 'car-status.refresh-token';
 const META_KEY = 'car-status/session-meta/v2';
+
+/**
+ * على الجوال: التوكنات في المخزن المشفّر (Keychain / Keystore).
+ * على الويب ما فيه مخزن مشفّر في المتصفح، فنستخدم التخزين المحلي (localStorage) — نفس اللي تسويه مكتبة Supabase الرسمية.
+ */
+const secure = {
+  get: (k: string) => (Platform.OS === 'web' ? AsyncStorage.getItem(k) : SecureStore.getItemAsync(k)),
+  set: (k: string, v: string) => (Platform.OS === 'web' ? AsyncStorage.setItem(k, v) : SecureStore.setItemAsync(k, v)),
+  del: (k: string) => (Platform.OS === 'web' ? AsyncStorage.removeItem(k) : SecureStore.deleteItemAsync(k)),
+};
 export const BUCKET = 'car-files';
 /** صفحة تغيير كلمة السر (على موقع car-web في Vercel) */
 const RESET_URL = process.env.EXPO_PUBLIC_RESET_URL ?? 'https://car-web-livid.vercel.app/reset-password';
@@ -70,11 +81,11 @@ function toSession(j: AuthJson): Session | null {
 async function saveSession(s: Session | null) {
   current = s;
   if (s) {
-    await SecureStore.setItemAsync(ACCESS_KEY, s.accessToken);
-    await SecureStore.setItemAsync(REFRESH_KEY, s.refreshToken);
+    await secure.set(ACCESS_KEY, s.accessToken);
+    await secure.set(REFRESH_KEY, s.refreshToken);
     await AsyncStorage.setItem(META_KEY, JSON.stringify({ expiresAt: s.expiresAt, user: s.user }));
   } else {
-    await Promise.all([SecureStore.deleteItemAsync(ACCESS_KEY), SecureStore.deleteItemAsync(REFRESH_KEY), AsyncStorage.removeItem(META_KEY)]).catch(() => {});
+    await Promise.all([secure.del(ACCESS_KEY), secure.del(REFRESH_KEY), AsyncStorage.removeItem(META_KEY)]).catch(() => {});
   }
   await AsyncStorage.removeItem(LEGACY_SESSION_KEY).catch(() => {});
 }
@@ -83,8 +94,8 @@ async function saveSession(s: Session | null) {
 async function loadSession(): Promise<Session | null> {
   try {
     const [accessToken, refreshToken, metaRaw] = await Promise.all([
-      SecureStore.getItemAsync(ACCESS_KEY),
-      SecureStore.getItemAsync(REFRESH_KEY),
+      secure.get(ACCESS_KEY),
+      secure.get(REFRESH_KEY),
       AsyncStorage.getItem(META_KEY),
     ]);
     if (accessToken && refreshToken && metaRaw) {

@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../../components/common/SafeAreaView';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Text from '../../components/common/Text';
 import { useStore } from '../../store/AppStore';

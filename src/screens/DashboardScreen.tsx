@@ -1,7 +1,7 @@
 import { I18nManager, Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Text from '../components/common/Text';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import SafeAreaView from '../components/common/SafeAreaView';
 import { useNavigation } from '@react-navigation/native';
 import { DashboardHeader, SectionTitle, ServiceGrid, SummerCard, VehicleCard } from '../components/dashboard';
 import { NextMaintenanceCard } from '../components/maintenance';
